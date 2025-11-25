@@ -32,4 +32,3 @@ func New(status int, code, message string) *APIError {
 		Message: message,
 	}
 }
-
