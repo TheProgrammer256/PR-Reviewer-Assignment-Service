@@ -9,8 +9,6 @@ import (
 	"github.com/avito/pr-reviewer-assignment-service/internal/apperr"
 )
 
-// ErrorHandler renders APIError instances as JSON envelopes while delegating
-// parsing/validation issues to the default handler.
 func ErrorHandler(w http.ResponseWriter, r *http.Request, err error, result *openapi.ImplResponse) {
 	var apiErr *apperr.APIError
 	if errors.As(err, &apiErr) {
