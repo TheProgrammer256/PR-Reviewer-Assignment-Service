@@ -1,0 +1,611 @@
+openapi: 3.0.3
+info:
+  title: "PR Reviewer Assignment Service (Test Task, Fall 2025)"
+  version: 1.0.0
+servers:
+- url: /
+tags:
+- name: Teams
+- name: Users
+- name: PullRequests
+- name: Health
+paths:
+  /team/add:
+    post:
+      operationId: createTeam
+      requestBody:
+        content:
+          application/json:
+            example:
+              team_name: payments
+              members:
+              - user_id: u1
+                username: Alice
+                is_active: true
+              - user_id: u2
+                username: Bob
+                is_active: true
+            schema:
+              $ref: "#/components/schemas/Team"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              example:
+                team:
+                  team_name: backend
+                  members:
+                  - user_id: u1
+                    username: Alice
+                    is_active: true
+                  - user_id: u2
+                    username: Bob
+                    is_active: true
+              schema:
+                $ref: "#/components/schemas/createTeam_201_response"
+          description: Команда создана
+        "400":
+          content:
+            application/json:
+              example:
+                error:
+                  code: TEAM_EXISTS
+                  message: team_name already exists
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Команда уже существует
+      summary: Создать команду с участниками (создаёт/обновляет пользователей)
+      tags:
+      - Teams
+  /team/get:
+    get:
+      operationId: getTeam
+      parameters:
+      - description: Уникальное имя команды
+        explode: true
+        in: query
+        name: team_name
+        required: true
+        schema:
+          type: string
+        style: form
+      responses:
+        "200":
+          content:
+            application/json:
+              example:
+                team_name: backend
+                members:
+                - user_id: u1
+                  username: Alice
+                  is_active: true
+                - user_id: u2
+                  username: Bob
+                  is_active: true
+              schema:
+                $ref: "#/components/schemas/Team"
+          description: Объект команды
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Команда не найдена
+      summary: Получить команду с участниками
+      tags:
+      - Teams
+  /users/setIsActive:
+    post:
+      operationId: updateActiveFlag
+      requestBody:
+        content:
+          application/json:
+            example:
+              user_id: u2
+              is_active: false
+            schema:
+              $ref: "#/components/schemas/updateActiveFlag_request"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              example:
+                user:
+                  user_id: u2
+                  username: Bob
+                  team_name: backend
+                  is_active: false
+              schema:
+                $ref: "#/components/schemas/updateActiveFlag_200_response"
+          description: Обновлённый пользователь
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Пользователь не найден
+      summary: Установить флаг активности пользователя
+      tags:
+      - Users
+  /pullRequest/create:
+    post:
+      operationId: createPullRequestAndAssign
+      requestBody:
+        content:
+          application/json:
+            example:
+              pull_request_id: pr-1001
+              pull_request_name: Add search
+              author_id: u1
+            schema:
+              $ref: "#/components/schemas/createPullRequestAndAssign_request"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              example:
+                pr:
+                  pull_request_id: pr-1001
+                  pull_request_name: Add search
+                  author_id: u1
+                  status: OPEN
+                  assigned_reviewers:
+                  - u2
+                  - u3
+              schema:
+                $ref: "#/components/schemas/createPullRequestAndAssign_201_response"
+          description: PR создан
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Автор/команда не найдены
+        "409":
+          content:
+            application/json:
+              example:
+                error:
+                  code: PR_EXISTS
+                  message: PR id already exists
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: PR уже существует
+      summary: Создать PR и автоматически назначить до 2 ревьюверов из команды автора
+      tags:
+      - PullRequests
+  /pullRequest/merge:
+    post:
+      operationId: updateMergedFlag
+      requestBody:
+        content:
+          application/json:
+            example:
+              pull_request_id: pr-1001
+            schema:
+              $ref: "#/components/schemas/updateMergedFlag_request"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              example:
+                pr:
+                  pull_request_id: pr-1001
+                  pull_request_name: Add search
+                  author_id: u1
+                  status: MERGED
+                  assigned_reviewers:
+                  - u2
+                  - u3
+                  mergedAt: 2025-10-24T12:34:56Z
+              schema:
+                $ref: "#/components/schemas/createPullRequestAndAssign_201_response"
+          description: PR в состоянии MERGED
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: PR не найден
+      summary: Пометить PR как MERGED (идемпотентная операция)
+      tags:
+      - PullRequests
+  /pullRequest/reassign:
+    post:
+      operationId: reassignUserOnPullRequest
+      requestBody:
+        content:
+          application/json:
+            example:
+              pull_request_id: pr-1001
+              old_reviewer_id: u2
+            schema:
+              $ref: "#/components/schemas/reassignUserOnPullRequest_request"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              example:
+                pr:
+                  pull_request_id: pr-1001
+                  pull_request_name: Add search
+                  author_id: u1
+                  status: OPEN
+                  assigned_reviewers:
+                  - u3
+                  - u5
+                replaced_by: u5
+              schema:
+                $ref: "#/components/schemas/reassignUserOnPullRequest_200_response"
+          description: Переназначение выполнено
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: PR или пользователь не найден
+        "409":
+          content:
+            application/json:
+              examples:
+                merged:
+                  summary: Нельзя менять после MERGED
+                  value:
+                    error:
+                      code: PR_MERGED
+                      message: cannot reassign on merged PR
+                notAssigned:
+                  summary: Пользователь не был назначен ревьювером
+                  value:
+                    error:
+                      code: NOT_ASSIGNED
+                      message: reviewer is not assigned to this PR
+                noCandidate:
+                  summary: Нет доступных кандидатов
+                  value:
+                    error:
+                      code: NO_CANDIDATE
+                      message: no active replacement candidate in team
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Нарушение доменных правил переназначения
+      summary: Переназначить конкретного ревьювера на другого из его команды
+      tags:
+      - PullRequests
+  /users/getReview:
+    get:
+      operationId: getPullRequestsByUser
+      parameters:
+      - description: Идентификатор пользователя
+        explode: true
+        in: query
+        name: user_id
+        required: true
+        schema:
+          type: string
+        style: form
+      responses:
+        "200":
+          content:
+            application/json:
+              example:
+                user_id: u2
+                pull_requests:
+                - pull_request_id: pr-1001
+                  pull_request_name: Add search
+                  author_id: u1
+                  status: OPEN
+              schema:
+                $ref: "#/components/schemas/getPullRequestsByUser_200_response"
+          description: Список PR'ов пользователя
+      summary: "Получить PR'ы, где пользователь назначен ревьювером"
+      tags:
+      - Users
+components:
+  parameters:
+    TeamNameQuery:
+      description: Уникальное имя команды
+      explode: true
+      in: query
+      name: team_name
+      required: true
+      schema:
+        type: string
+      style: form
+    UserIdQuery:
+      description: Идентификатор пользователя
+      explode: true
+      in: query
+      name: user_id
+      required: true
+      schema:
+        type: string
+      style: form
+  schemas:
+    ErrorResponse:
+      example:
+        error:
+          code: NOT_FOUND
+          message: resource not found
+      properties:
+        error:
+          $ref: "#/components/schemas/ErrorResponse_error"
+      required:
+      - error
+      type: object
+    TeamMember:
+      example:
+        is_active: true
+        user_id: user_id
+        username: username
+      properties:
+        user_id:
+          type: string
+        username:
+          type: string
+        is_active:
+          type: boolean
+      required:
+      - is_active
+      - user_id
+      - username
+      type: object
+    Team:
+      example:
+        members:
+        - is_active: true
+          user_id: user_id
+          username: username
+        - is_active: true
+          user_id: user_id
+          username: username
+        team_name: team_name
+      properties:
+        team_name:
+          type: string
+        members:
+          items:
+            $ref: "#/components/schemas/TeamMember"
+          type: array
+      required:
+      - members
+      - team_name
+      type: object
+    User:
+      example:
+        is_active: true
+        user_id: user_id
+        team_name: team_name
+        username: username
+      properties:
+        user_id:
+          type: string
+        username:
+          type: string
+        team_name:
+          type: string
+        is_active:
+          type: boolean
+      required:
+      - is_active
+      - team_name
+      - user_id
+      - username
+      type: object
+    PullRequest:
+      example:
+        createdAt: 2000-01-23T04:56:07.000+00:00
+        mergedAt: 2000-01-23T04:56:07.000+00:00
+        author_id: author_id
+        pull_request_id: pull_request_id
+        pull_request_name: pull_request_name
+        assigned_reviewers:
+        - assigned_reviewers
+        - assigned_reviewers
+        status: OPEN
+      properties:
+        pull_request_id:
+          type: string
+        pull_request_name:
+          type: string
+        author_id:
+          type: string
+        status:
+          enum:
+          - OPEN
+          - MERGED
+          type: string
+        assigned_reviewers:
+          description: user_id назначенных ревьюверов (0..2)
+          items:
+            type: string
+          type: array
+        createdAt:
+          format: date-time
+          nullable: true
+          type: string
+        mergedAt:
+          format: date-time
+          nullable: true
+          type: string
+      required:
+      - assigned_reviewers
+      - author_id
+      - pull_request_id
+      - pull_request_name
+      - status
+      type: object
+    PullRequestShort:
+      example:
+        author_id: author_id
+        pull_request_id: pull_request_id
+        pull_request_name: pull_request_name
+        status: OPEN
+      properties:
+        pull_request_id:
+          type: string
+        pull_request_name:
+          type: string
+        author_id:
+          type: string
+        status:
+          enum:
+          - OPEN
+          - MERGED
+          type: string
+      required:
+      - author_id
+      - pull_request_id
+      - pull_request_name
+      - status
+      type: object
+    createTeam_201_response:
+      example:
+        team:
+          members:
+          - is_active: true
+            user_id: user_id
+            username: username
+          - is_active: true
+            user_id: user_id
+            username: username
+          team_name: team_name
+      properties:
+        team:
+          $ref: "#/components/schemas/Team"
+      type: object
+    updateActiveFlag_request:
+      properties:
+        user_id:
+          type: string
+        is_active:
+          type: boolean
+      required:
+      - is_active
+      - user_id
+      type: object
+    updateActiveFlag_200_response:
+      example:
+        user:
+          is_active: true
+          user_id: user_id
+          team_name: team_name
+          username: username
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+      type: object
+    createPullRequestAndAssign_request:
+      properties:
+        pull_request_id:
+          type: string
+        pull_request_name:
+          type: string
+        author_id:
+          type: string
+      required:
+      - author_id
+      - pull_request_id
+      - pull_request_name
+      type: object
+    createPullRequestAndAssign_201_response:
+      example:
+        pr:
+          createdAt: 2000-01-23T04:56:07.000+00:00
+          mergedAt: 2000-01-23T04:56:07.000+00:00
+          author_id: author_id
+          pull_request_id: pull_request_id
+          pull_request_name: pull_request_name
+          assigned_reviewers:
+          - assigned_reviewers
+          - assigned_reviewers
+          status: OPEN
+      properties:
+        pr:
+          $ref: "#/components/schemas/PullRequest"
+      type: object
+    updateMergedFlag_request:
+      properties:
+        pull_request_id:
+          type: string
+      required:
+      - pull_request_id
+      type: object
+    reassignUserOnPullRequest_request:
+      properties:
+        pull_request_id:
+          type: string
+        old_user_id:
+          type: string
+      required:
+      - old_user_id
+      - pull_request_id
+      type: object
+    reassignUserOnPullRequest_200_response:
+      example:
+        pr:
+          createdAt: 2000-01-23T04:56:07.000+00:00
+          mergedAt: 2000-01-23T04:56:07.000+00:00
+          author_id: author_id
+          pull_request_id: pull_request_id
+          pull_request_name: pull_request_name
+          assigned_reviewers:
+          - assigned_reviewers
+          - assigned_reviewers
+          status: OPEN
+        replaced_by: replaced_by
+      properties:
+        pr:
+          $ref: "#/components/schemas/PullRequest"
+        replaced_by:
+          description: user_id нового ревьювера
+          type: string
+      required:
+      - pr
+      - replaced_by
+      type: object
+    getPullRequestsByUser_200_response:
+      example:
+        pull_requests:
+        - author_id: author_id
+          pull_request_id: pull_request_id
+          pull_request_name: pull_request_name
+          status: OPEN
+        - author_id: author_id
+          pull_request_id: pull_request_id
+          pull_request_name: pull_request_name
+          status: OPEN
+        user_id: user_id
+      properties:
+        user_id:
+          type: string
+        pull_requests:
+          items:
+            $ref: "#/components/schemas/PullRequestShort"
+          type: array
+      required:
+      - pull_requests
+      - user_id
+      type: object
+    ErrorResponse_error:
+      properties:
+        code:
+          enum:
+          - TEAM_EXISTS
+          - PR_EXISTS
+          - PR_MERGED
+          - NOT_ASSIGNED
+          - NO_CANDIDATE
+          - NOT_FOUND
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - message
+      type: object
